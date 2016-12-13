@@ -27,7 +27,7 @@ using System.Collections.Generic;
 namespace Win32API
 {
 
-public class Win32APIException: Exception
+public sealed class Win32APIException: Exception
 {
     int code;
     string message;
@@ -95,7 +95,7 @@ public class Win32APIException: Exception
     }
 }
 
-public class UserEnv
+public sealed class UserEnv
 {
     [DllImport("userenv.dll", EntryPoint="CreateEnvironmentBlock", SetLastError=true)]
     public static extern bool _CreateEnvironmentBlock(out IntPtr lpEnvironment, IntPtr hToken, bool bInherit);
@@ -160,7 +160,7 @@ public class UserEnv
     }
 }
 
-public class Kernel32
+public sealed class Kernel32
 {
     [Flags]
     public enum FormatMessageFlags: uint
@@ -358,14 +358,55 @@ public class Kernel32
         FAILED = 0xFFFFFFFF
     }
 
-    [DllImport("kernel32.dll", SetLastError=true)]
-    public static extern WaitCode WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+    [DllImport("kernel32.dll", EntryPoint="WaitForSingleObject", SetLastError=true)]
+    public static extern WaitCode _WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+    public static WaitCode WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds)
+    {
+        WaitCode retval = _WaitForSingleObject(hHandle, dwMilliseconds);
+        if (retval == WaitCode.FAILED)
+        {
+            throw new Win32APIException(Marshal.GetLastWin32Error());
+        }
+        return retval;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint="WaitForInputIdle", SetLastError=true)]
+    public static extern WaitCode _WaitForInputIdle(IntPtr hHandle, uint dwMilliseconds);
+
+    public static WaitCode WaitForInputIdle(IntPtr hHandle, uint dwMilliseconds)
+    {
+        WaitCode retval = _WaitForInputIdle(hHandle, dwMilliseconds);
+        if (retval == WaitCode.FAILED)
+        {
+            throw new Win32APIException(Marshal.GetLastWin32Error());
+        }
+        return retval;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint="GetExitCodeProcess", SetLastError=true)]
+    public static extern bool _GetExitCodeProcess(IntPtr hProcess, out uint lpExitCode);
+
+    public static uint GetExitCodeProcess(IntPtr hProcess)
+    {
+        uint retval;
+        if (!_GetExitCodeProcess(hProcess, out retval))
+        {
+            throw new Win32APIException(Marshal.GetLastWin32Error());
+        }
+        return retval;
+    }
+
 
     [DllImport("kernel32.dll", EntryPoint="GetCurrentProcess", SetLastError=false)]
     public static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", EntryPoint="GetProcessId", SetLastError=false)]
+    public static extern uint GetProcessId(IntPtr hProcess);
+
 }
 
-public class User32
+public sealed class User32
 {
     public enum ShowWindowCommand
     {
@@ -515,7 +556,7 @@ public class User32
     }
 }
 
-public class AdvApi32
+public sealed class AdvApi32
 {
     [StructLayout(LayoutKind.Sequential)]
     public struct SECURITY_ATTRIBUTES
@@ -1994,6 +2035,26 @@ public class AdvApi32
             throw new Win32APIException(Marshal.GetLastWin32Error());
         }
         return retval;
+    }
+}
+
+public sealed class PSAPI
+{
+    [DllImport("psapi.dll", EntryPoint="GetProcessImageFileNameW", SetLastError=true)]
+    public static extern uint _GetProcessImageFileName(IntPtr hProcess, IntPtr lpImageFileName, uint nSize);
+
+    public static string GetProcessImageFileName(IntPtr hProcess)
+    {
+        IntPtr buf = Marshal.AllocHGlobal(260);
+        try
+        {
+            uint len = _GetProcessImageFileName(hProcess, buf, 260);
+            return Marshal.PtrToStringUni(buf, (int)len);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buf);
+        }
     }
 }
 

@@ -18,7 +18,97 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 # THE SOFTWARE.
 
-Add-Type -LiteralPath (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Definition) "Win32API.dll")
+$win32apidll = (Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Definition) "Win32API.dll")
+Add-Type -LiteralPath $win32apidll
+
+Add-Type -TypeDefinition @'
+using System;
+
+namespace StartProcessAsUser {
+
+public class Process: IDisposable
+{
+    IntPtr handle;
+
+    public int Id
+    {
+        get
+        {
+            return (int)Win32API.Kernel32.GetProcessId(handle);
+        }
+    }
+
+    public IntPtr Handle
+    {
+        get { return handle; }
+    }
+
+    public int ExitCode
+    {
+        get
+        {
+            return (int)Win32API.Kernel32.GetExitCodeProcess(handle);
+        }
+    }
+
+    public string ProcessName
+    {
+        get
+        {
+            return Win32API.PSAPI.GetProcessImageFileName(handle);         
+        }
+    }
+
+    public void Dispose()
+    {
+        if (handle != IntPtr.Zero)
+        {
+            Win32API.Kernel32.CloseHandle(handle);
+        }
+        handle = IntPtr.Zero;
+    }
+
+    ~Process()
+    {
+        Dispose();
+    }
+
+    public void WaitForExit()
+    {
+        Win32API.Kernel32.WaitForSingleObject(handle, uint.MaxValue);
+    }
+
+    public void WaitForExit(int timeout)
+    {
+        if (timeout < 0)
+        {
+            throw new ArgumentException("timeout cannot be negative");
+        }
+        Win32API.Kernel32.WaitForSingleObject(handle, (uint)timeout);
+    }
+
+    public void WaitForInputIdle()
+    {
+        Win32API.Kernel32.WaitForInputIdle(handle, uint.MaxValue);
+    }
+
+    public void WaitForInputIdle(int timeout)
+    {
+        if (timeout < 0)
+        {
+            throw new ArgumentException("timeout cannot be negative");
+        }
+        Win32API.Kernel32.WaitForInputIdle(handle, (uint)timeout);
+    }
+
+    public Process(IntPtr handle)
+    {
+        this.handle = handle;
+    }
+}
+
+}
+'@ -Language CSharp -ReferencedAssemblies $win32apidll  
 
 function Start-ProcessAsUser
 {
@@ -31,7 +121,8 @@ function Start-ProcessAsUser
         [switch] $UseNewEnvironment = $true,
         [System.Diagnostics.ProcessWindowStyle] $WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Normal,
         [string] $WorkingDirectory = $null,
-        [switch] $Wait = $false
+        [switch] $Wait = $false,
+        [switch] $PassThru = $false
     )
   
     [object] $_workingDirectory = [nullstring]::Value
@@ -248,9 +339,26 @@ function Start-ProcessAsUser
                 $_workingDirectory,
                 [ref] $startupInfo
             )
-            if ($Wait)
+            $info = (New-Object StartProcessAsUser.Process $processinfo.hProcess)
+            $ok = $false
+            try
             {
-                [void] [Win32API.Kernel32]::WaitForSingleObject($processInfo.hProcess, [Uint32]::MaxValue)
+                if ($Wait)
+                {
+                    $info.WaitForExit()
+                }
+                $ok = $true
+                if ($PassThru)
+                {
+                    $info
+                }
+            }
+            finally
+            {
+                if (!$ok)
+                {
+                    $info.Dispose()
+                }
             }
         }
         finally
@@ -262,10 +370,6 @@ function Start-ProcessAsUser
             if ($env -ne [IntPtr]::Zero)
             {
                 [Win32API.UserEnv]::DestroyEnvironmentBlock($env)
-            }
-            if ($processInfo.hProcess -ne [IntPtr]::Zero)
-            {
-                [Win32API.Kernel32]::CloseHandle($processInfo.hProcess)
             }
             if ($processInfo.hThread -ne [IntPtr]::Zero)
             {
