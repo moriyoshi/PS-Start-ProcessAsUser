@@ -302,7 +302,7 @@ function Start-ProcessAsUser
                 $startupInfo.wShowWindow = [Int16] [Win32API.User32+ShowWindowCommand]::SW_SHOWNORMAL
             }
 
-            [IntPtr] $profile = [IntPtr]::Zero
+            [Win32API.UserEnv+PROFILEINFO] $profile = (New-Object Win32API.UserEnv+PROFILEINFO)
             [IntPtr] $env = [IntPtr]::Zero
             [Win32API.Kernel32+PROCESS_INFORMATION] $processInfo = (New-Object Win32API.Kernel32+PROCESS_INFORMATION)
             try

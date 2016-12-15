@@ -1,6 +1,6 @@
 @{
 RootModule = 'Start-ProcessAsUser.psm1'
-ModuleVersion = '0.1.1'
+ModuleVersion = '0.1.2'
 GUID = 'ffee40f3-cf73-421f-b0b5-db66ef2cb0bb'
 Author = 'Moriyoshi Koizumi'
 Copyright = '(c) Moriyoshi Koizumi. All rights reserved.'
