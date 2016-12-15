@@ -365,7 +365,7 @@ function Start-ProcessAsUser
             }
             finally
             {
-                if ($profile -ne [IntPtr]::Zero)
+                if ($LoadUserProfile)
                 {
                     [Win32API.UserEnv]::UnLoadUserProfile($token, [ref] $profile)
                 }
